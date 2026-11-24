@@ -27,7 +27,6 @@ let showingId = 0;
 let shownId = 0;
 let hidingId = 0;
 let monitorsChangedId = 0;
-let primaryFocusInId = 0;
 let pendingFocusId = 0;
 
 function primaryIndex() {
@@ -100,6 +99,20 @@ function setFocusedMonitor(monitorIndex) {
             monitorIndex === null ? 'primary' : monitorIndex}`);
     }
     syncStageHandlers();
+}
+
+/**
+ * Clutter delivers key focus to the entry's inner Clutter.Text, so a
+ * `key-focus-in` handler on the St.Entry itself is unreliable. Derive the
+ * monitor from the actually focused actor instead. A null focus is transient
+ * (e.g. search reset) and deliberately ignored so the owner stays sticky.
+ */
+function onStageKeyFocusChanged() {
+    const focusMonitor = monitorForActor(global.stage?.get_key_focus?.());
+    if (focusMonitor !== null)
+        setFocusedMonitor(focusMonitor === primaryIndex() ? null : focusMonitor);
+    else
+        syncStageHandlers();
 }
 
 function setHandlerBlocked(id, block) {
@@ -208,12 +221,9 @@ function createController(monitorIndex) {
         display: null,
         destroyId: 0,
         searchActiveId: 0,
-        focusInId: 0,
     };
     box.searchActiveId = controller.connect('notify::search-active',
         () => updateSearchVisibility(box));
-    box.focusInId = entry.connect('key-focus-in',
-        () => setFocusedMonitor(monitorIndex));
 
     // GNOME resets search when the text becomes empty. Keep focus on our entry
     // so the next keystroke does not fall through to the primary search box.
@@ -223,7 +233,13 @@ function createController(monitorIndex) {
         originalReset();
         if (keepFocus && applied) {
             GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                box.entry.grab_key_focus();
+                // The user may have focused another search box (e.g. the
+                // primary one) before this idle ran. Never steal it back.
+                if (activeMonitor !== monitorIndex)
+                    return GLib.SOURCE_REMOVE;
+                const focus = monitorForActor(global.stage?.get_key_focus?.());
+                if (focus === null || focus === monitorIndex)
+                    box.entry.grab_key_focus();
                 return GLib.SOURCE_REMOVE;
             });
         }
@@ -253,8 +269,6 @@ function destroyController(monitorIndex) {
     detachBox(monitorIndex);
     if (box.searchActiveId)
         box.controller.disconnect(box.searchActiveId);
-    if (box.focusInId)
-        box.entry.disconnect(box.focusInId);
     box.controller.destroy();
     controllers.delete(monitorIndex);
 }
@@ -388,31 +402,12 @@ function onMonitorsChanged() {
     syncStageHandlers();
 }
 
-function connectPrimaryEntryFocus() {
-    if (primaryFocusInId)
-        return;
-    const entry = Main.overview?.searchEntry;
-    if (!entry)
-        return;
-    // Explicitly focusing the primary search box is the only way to hand
-    // control back to GNOME's controller after a secondary one took over.
-    primaryFocusInId = entry.connect('key-focus-in',
-        () => setFocusedMonitor(null));
-}
-
-function disconnectPrimaryEntryFocus() {
-    if (!primaryFocusInId)
-        return;
-    Main.overview?.searchEntry?.disconnect(primaryFocusInId);
-    primaryFocusInId = 0;
-}
-
 export function applyOverviewSearch() {
     if (applied)
         return;
     applied = true;
 
-    focusId = global.stage.connect('notify::key-focus', syncStageHandlers);
+    focusId = global.stage.connect('notify::key-focus', onStageKeyFocusChanged);
     if (Main.overview) {
         showingId = Main.overview.connect('showing', onOverviewShowing);
         shownId = Main.overview.connect('shown', onOverviewShown);
@@ -420,7 +415,6 @@ export function applyOverviewSearch() {
     }
     monitorsChangedId = Main.layoutManager.connect('monitors-changed', onMonitorsChanged);
     onMonitorsChanged();
-    connectPrimaryEntryFocus();
     console.log('[MMBv2 search] independent search patch applied');
 }
 
@@ -443,7 +437,6 @@ export function revertOverviewSearch() {
         Main.overview.disconnect(hidingId);
     if (monitorsChangedId)
         Main.layoutManager.disconnect(monitorsChangedId);
-    disconnectPrimaryEntryFocus();
     focusId = showingId = shownId = hidingId = monitorsChangedId = 0;
 
     for (const id of [...blockedHandlers]) {
