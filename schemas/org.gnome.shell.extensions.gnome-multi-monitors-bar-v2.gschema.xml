@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-multi-monitors-bar-v2">
+  <schema id="org.gnome.shell.extensions.gnome-multi-monitors-bar-v2"
+          path="/org/gnome/shell/extensions/gnome-multi-monitors-bar-v2/">
+
+    <key name="show-panel" type="b">
+      <default>true</default>
+      <summary>Show panels on additional monitors</summary>
+    </key>
+
+    <key name="show-activities" type="b">
+      <default>true</default>
+      <summary>Show Activities button</summary>
+    </key>
+
+    <key name="show-app-menu" type="b">
+      <default>false</default>
+      <summary>Show application menu</summary>
+      <description>GNOME 45+ removed the app menu from the default panel; enable if desired.</description>
+    </key>
+
+    <key name="show-date-time" type="b">
+      <default>true</default>
+      <summary>Show date and time</summary>
+    </key>
+
+    <key name="show-status-indicators" type="b">
+      <default>true</default>
+      <summary>Show status indicators and Quick Settings</summary>
+    </key>
+
+    <key name="date-time-position" type="s">
+      <default>'center'</default>
+      <summary>Date and time position</summary>
+      <description>One of: center, left, right-before-tray, right-after-tray.</description>
+    </key>
+
+    <key name="panel-color" type="s">
+      <default>''</default>
+      <summary>Default panel background color</summary>
+      <description>CSS color value. Empty means follow the shell theme.</description>
+    </key>
+
+    <key name="monitor-panel-layout" type="s">
+      <default>'{}'</default>
+      <summary>Per-monitor panel layout</summary>
+      <description>JSON map keyed by monitor key. Values may include position and color.</description>
+    </key>
+
+    <key name="monitor-indicator-catalog" type="s">
+      <default>'{}'</default>
+      <summary>Published monitor and indicator catalog</summary>
+      <description>JSON published by the extension for the preferences UI.</description>
+    </key>
+
+    <key name="monitor-indicator-visibility" type="s">
+      <default>'{}'</default>
+      <summary>Per-monitor indicator visibility</summary>
+      <description>JSON map keyed by monitor key with role boolean visibility.</description>
+    </key>
+
+  </schema>
+</schemalist>
