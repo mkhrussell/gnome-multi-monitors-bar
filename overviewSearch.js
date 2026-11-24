@@ -227,11 +227,17 @@ function createController(monitorIndex) {
 
     // GNOME resets search when the text becomes empty. Keep focus on our entry
     // so the next keystroke does not fall through to the primary search box.
+    // An Escape-triggered reset is different: it must leave the entry so a
+    // second Escape exits the overview. GNOME stops the event before it
+    // reaches the stage, so identify that path from the caller instead.
     const originalReset = controller.reset.bind(controller);
     controller.reset = () => {
+        const stack = new Error().stack ?? '';
+        const fromEscape = stack.includes('_onKeyPress') ||
+            stack.includes('_onStageKeyPress');
         const keepFocus = monitorForActor(global.stage.get_key_focus()) === monitorIndex;
         originalReset();
-        if (keepFocus && applied) {
+        if (keepFocus && applied && !fromEscape) {
             GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
                 // The user may have focused another search box (e.g. the
                 // primary one) before this idle ran. Never steal it back.
