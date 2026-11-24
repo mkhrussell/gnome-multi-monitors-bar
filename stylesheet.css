@@ -1,0 +1,18 @@
+/* Secondary panels reuse GNOME Shell panel styling. This file only handles
+ * alignment and makes inline color overrides predictable. */
+
+.multimonitor-panel {
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+.multimonitor-panel #panelLeft,
+.multimonitor-panel #panelCenter,
+.multimonitor-panel #panelRight {
+    y-expand: true;
+}
+
+.multimonitor-panel .panel-button {
+    y-expand: true;
+}
