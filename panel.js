@@ -1,41 +1,71 @@
+/* Secondary GNOME Shell panel for additional monitors.
+ *
+ * Based on Ubuntu GNOME Shell 50 panel.js (libshell-18 gresource), adapted for
+ * per-monitor use in an extension. Upstream provenance is preserved in
+ * upstream/panel.js.
+ */
+
 import Atk from 'gi://Atk';
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
-import * as Config from '../misc/config.js';
-import * as CtrlAltTab from './ctrlAltTab.js';
-import * as DND from './dnd.js';
-import * as PopupMenu from './popupMenu.js';
-import * as PanelMenu from './panelMenu.js';
-import {QuickSettingsMenu, SystemIndicator} from './quickSettings.js';
-import * as Main from './main.js';
-import * as Util from '../misc/util.js';
+import {AppMenu} from 'resource:///org/gnome/shell/ui/appMenu.js';
+import {Spinner} from 'resource:///org/gnome/shell/ui/animation.js';
+import * as Config from 'resource:///org/gnome/shell/misc/config.js';
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
+import {ANIMATION_TIME} from 'resource:///org/gnome/shell/ui/overview.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import {QuickSettingsMenu, SystemIndicator} from 'resource:///org/gnome/shell/ui/quickSettings.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 
-import * as RemoteAccessStatus from './status/remoteAccess.js';
-import * as PowerProfileStatus from './status/powerProfiles.js';
-import * as RFKillStatus from './status/rfkill.js';
-import * as CameraStatus from './status/camera.js';
-import * as VolumeStatus from './status/volume.js';
-import * as BrightnessStatus from './status/brightness.js';
-import * as SystemStatus from './status/system.js';
-import * as LocationStatus from './status/location.js';
-import * as NightLightStatus from './status/nightLight.js';
-import * as DarkModeStatus from './status/darkMode.js';
-import * as DoNotDisturb from './status/doNotDisturb.js';
-import * as BacklightStatus from './status/backlight.js';
-import * as ThunderboltStatus from './status/thunderbolt.js';
-import * as AutoRotateStatus from './status/autoRotate.js';
-import * as BackgroundAppsStatus from './status/backgroundApps.js';
+import * as RemoteAccessStatus from 'resource:///org/gnome/shell/ui/status/remoteAccess.js';
+import * as PowerProfileStatus from 'resource:///org/gnome/shell/ui/status/powerProfiles.js';
+import * as RFKillStatus from 'resource:///org/gnome/shell/ui/status/rfkill.js';
+import * as CameraStatus from 'resource:///org/gnome/shell/ui/status/camera.js';
+import * as VolumeStatus from 'resource:///org/gnome/shell/ui/status/volume.js';
+import * as BrightnessStatus from 'resource:///org/gnome/shell/ui/status/brightness.js';
+import * as SystemStatus from 'resource:///org/gnome/shell/ui/status/system.js';
+import * as LocationStatus from 'resource:///org/gnome/shell/ui/status/location.js';
+import * as NightLightStatus from 'resource:///org/gnome/shell/ui/status/nightLight.js';
+import * as DarkModeStatus from 'resource:///org/gnome/shell/ui/status/darkMode.js';
+import * as DoNotDisturb from 'resource:///org/gnome/shell/ui/status/doNotDisturb.js';
+import * as BacklightStatus from 'resource:///org/gnome/shell/ui/status/backlight.js';
+import * as ThunderboltStatus from 'resource:///org/gnome/shell/ui/status/thunderbolt.js';
+import * as AutoRotateStatus from 'resource:///org/gnome/shell/ui/status/autoRotate.js';
+import * as BackgroundAppsStatus from 'resource:///org/gnome/shell/ui/status/backgroundApps.js';
 
-import {DateMenuButton} from './dateMenu.js';
-import {ATIndicator} from './status/accessibility.js';
-import {InputSourceIndicator} from './status/keyboard.js';
-import {DwellClickIndicator} from './status/dwellClick.js';
-import {ScreenRecordingIndicator, ScreenSharingIndicator} from './status/remoteAccess.js';
+import {DateMenuButton} from 'resource:///org/gnome/shell/ui/dateMenu.js';
+import {ATIndicator} from 'resource:///org/gnome/shell/ui/status/accessibility.js';
+import {InputSourceIndicator} from 'resource:///org/gnome/shell/ui/status/keyboard.js';
+import {DwellClickIndicator} from 'resource:///org/gnome/shell/ui/status/dwellClick.js';
+import {ScreenRecordingIndicator, ScreenSharingIndicator} from 'resource:///org/gnome/shell/ui/status/remoteAccess.js';
+
+import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+import {StatusIndicatorMirror} from './statusMirror.js';
+import {
+    BUILTIN_ROLES,
+    DATE_POSITIONS,
+    EXCLUDED_MIRROR_ROLES,
+    indicatorIsEnabled,
+    mergePanelColorStyle,
+    monitorKey,
+    panelColor,
+    panelColorDeclaration,
+    setTranslator,
+} from './settings.js';
+
+setTranslator(_);
+
+const PANEL_ICON_SIZE = 16;
+const APP_MENU_ICON_MARGIN = 0;
 
 const BUTTON_DND_ACTIVATION_TIMEOUT = 250;
 
@@ -301,18 +331,14 @@ class QuickSettings extends PanelMenu.Button {
 
     async _setupIndicators() {
         if (Config.HAVE_NETWORKMANAGER) {
-            /** @type {import('./status/network.js')} */
-            const NetworkStatus = await import('./status/network.js');
-
+            const NetworkStatus = await import('resource:///org/gnome/shell/ui/status/network.js');
             this._network = new NetworkStatus.Indicator();
         } else {
             this._network = null;
         }
 
         if (Config.HAVE_BLUETOOTH) {
-            /** @type {import('./status/bluetooth.js')} */
-            const BluetoothStatus = await import('./status/bluetooth.js');
-
+            const BluetoothStatus = await import('resource:///org/gnome/shell/ui/status/bluetooth.js');
             this._bluetooth = new BluetoothStatus.Indicator();
         } else {
             this._bluetooth = null;
@@ -336,14 +362,12 @@ class QuickSettings extends PanelMenu.Button {
         this._unsafeMode = new UnsafeModeIndicator();
         this._backgroundApps = new BackgroundAppsStatus.Indicator();
 
-        // add privacy-related indicators before any external indicators
         let pos = 0;
         this._indicators.insert_child_at_index(this._remoteAccess, pos++);
         this._indicators.insert_child_at_index(this._camera, pos++);
         this._indicators.insert_child_at_index(this._volumeInput, pos++);
         this._indicators.insert_child_at_index(this._location, pos++);
 
-        // append all other indicators
         this._indicators.add_child(this._brightness);
         this._indicators.add_child(this._thunderbolt);
         this._indicators.add_child(this._nightLight);
@@ -361,16 +385,11 @@ class QuickSettings extends PanelMenu.Button {
         this._indicators.add_child(this._powerProfiles);
         this._indicators.add_child(this._system);
 
-        // add our quick settings items before any external ones
         const sibling = this.menu.getFirstItem();
-        this._addItemsBefore(this._system.quickSettingsItems,
-            sibling, N_QUICK_SETTINGS_COLUMNS);
-        this._addItemsBefore(this._volumeOutput.quickSettingsItems,
-            sibling, N_QUICK_SETTINGS_COLUMNS);
-        this._addItemsBefore(this._volumeInput.quickSettingsItems,
-            sibling, N_QUICK_SETTINGS_COLUMNS);
-        this._addItemsBefore(this._brightness.quickSettingsItems,
-            sibling, N_QUICK_SETTINGS_COLUMNS);
+        this._addItemsBefore(this._system.quickSettingsItems, sibling, N_QUICK_SETTINGS_COLUMNS);
+        this._addItemsBefore(this._volumeOutput.quickSettingsItems, sibling, N_QUICK_SETTINGS_COLUMNS);
+        this._addItemsBefore(this._volumeInput.quickSettingsItems, sibling, N_QUICK_SETTINGS_COLUMNS);
+        this._addItemsBefore(this._brightness.quickSettingsItems, sibling, N_QUICK_SETTINGS_COLUMNS);
 
         this._addItemsBefore(this._camera.quickSettingsItems, sibling);
         this._addItemsBefore(this._remoteAccess.quickSettingsItems, sibling);
@@ -389,58 +408,244 @@ class QuickSettings extends PanelMenu.Button {
         this._addItemsBefore(this._autoRotate.quickSettingsItems, sibling);
         this._addItemsBefore(this._unsafeMode.quickSettingsItems, sibling);
 
-        // append background apps
         this._backgroundApps.quickSettingsItems.forEach(
             item => this.menu.addItem(item, N_QUICK_SETTINGS_COLUMNS));
+
+        this._seedAudioDevices();
     }
 
     _addItemsBefore(items, sibling, colSpan = 1) {
         items.forEach(item => this.menu.insertItemBefore(item, sibling, colSpan));
     }
 
-    /**
-     * Insert indicator and quick settings items at
-     * appropriate positions
-     *
-     * @param {SystemIndicator} indicator
-     * @param {number=} colSpan
-     */
+    _seedAudioDevices() {
+        const control = VolumeStatus.getMixerControl();
+        const uiDeviceId = stream =>
+            stream ? control.lookup_device_from_stream?.(stream)?.get_id?.() : undefined;
+
+        const seed = () => {
+            for (const sink of control.get_sinks?.() ?? []) {
+                const id = uiDeviceId(sink);
+                if (id !== undefined)
+                    this._volumeOutput?._output?._addDevice(id);
+            }
+            const defaultSinkId = uiDeviceId(control.get_default_sink?.());
+            if (defaultSinkId !== undefined)
+                this._volumeOutput?._output?._setActiveDevice(defaultSinkId);
+
+            for (const source of control.get_sources?.() ?? []) {
+                const id = uiDeviceId(source);
+                if (id !== undefined)
+                    this._volumeInput?._input?._addDevice(id);
+            }
+            const defaultSourceId = uiDeviceId(control.get_default_source?.());
+            if (defaultSourceId !== undefined)
+                this._volumeInput?._input?._setActiveDevice(defaultSourceId);
+        };
+
+        seed();
+        control.connectObject('state-changed', seed, this);
+    }
+
     addExternalIndicator(indicator, colSpan = 1) {
-        // Insert before first non-privacy indicator if it exists
         let sibling = this._brightness ?? null;
         this._indicators.insert_child_below(indicator, sibling);
-
-        // Insert before background apps if it exists
         sibling = this._backgroundApps?.quickSettingsItems?.at(-1) ?? null;
         this._addItemsBefore(indicator.quickSettingsItems, sibling, colSpan);
     }
 });
 
-const PANEL_ITEM_IMPLEMENTATIONS = {
-    'activities': ActivitiesButton,
-    'quickSettings': QuickSettings,
-    'dateMenu': DateMenuButton,
-    'a11y': ATIndicator,
-    'keyboard': InputSourceIndicator,
-    'dwellClick': DwellClickIndicator,
-    'screenRecording': ScreenRecordingIndicator,
-    'screenSharing': ScreenSharingIndicator,
-};
+const AppMenuButton = GObject.registerClass({
+    Signals: {changed: {}},
+}, class AppMenuButton extends PanelMenu.Button {
+    _init(panel) {
+        super._init(0.0, null, true);
+        this.accessible_role = Atk.Role.MENU;
+        this._startingApps = [];
+        this._targetApp = null;
+        this._menuManager = panel.menuManager;
 
-export const Panel = GObject.registerClass(
-class Panel extends St.Widget {
-    _init() {
-        super._init({
-            name: 'panel',
-            reactive: true,
+        const bin = new St.Bin({name: 'appMenu'});
+        this.add_child(bin);
+        this.bind_property('reactive', this, 'can-focus', 0);
+        this.reactive = false;
+
+        this._container = new St.BoxLayout({style_class: 'panel-status-menu-box'});
+        bin.set_child(this._container);
+
+        St.TextureCache.get_default().connectObject(
+            'icon-theme-changed', () => this._onIconThemeChanged(), this);
+
+        const iconEffect = new Clutter.DesaturateEffect();
+        this._iconBox = new St.Bin({
+            style_class: 'app-menu-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._iconBox.add_effect(iconEffect);
+        this._container.add_child(this._iconBox);
+        this._iconBox.connect('style-changed', () => {
+            iconEffect.enabled =
+                this._iconBox.get_theme_node().get_icon_style() === St.IconStyle.SYMBOLIC;
         });
 
+        this._label = new St.Label({
+            y_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._container.add_child(this._label);
+
+        this._spinner = new Spinner(PANEL_ICON_SIZE, {
+            animate: true,
+            hideOnStop: true,
+        });
+        this._container.add_child(this._spinner);
+
+        const menu = new AppMenu(this);
+        this.setMenu(menu);
+        this._menuManager.addMenu(menu);
+
+        Shell.WindowTracker.get_default().connectObject(
+            'notify::focus-app', () => this._focusAppChanged(), this);
+        Shell.AppSystem.get_default().connectObject(
+            'app-state-changed', (_sys, app) => this._onAppStateChanged(app), this);
+        global.window_manager?.connectObject('switch-workspace', () => this._sync(), this);
+        Main.overview.connectObject(
+            'hiding', () => this._sync(),
+            'showing', () => this._sync(), this);
+
+        this._visible = !Main.overview.visible;
+        if (!this._visible)
+            this.hide();
+        this._sync();
+    }
+
+    _syncIcon(app) {
+        this._iconBox.set_child(app.create_icon_texture(PANEL_ICON_SIZE - APP_MENU_ICON_MARGIN));
+    }
+
+    _onIconThemeChanged() {
+        if (this._iconBox.child && this._targetApp)
+            this._syncIcon(this._targetApp);
+    }
+
+    _onAppStateChanged(app) {
+        if (app.state === Shell.AppState.STARTING) {
+            if (!this._startingApps.includes(app))
+                this._startingApps.push(app);
+        } else {
+            this._startingApps = this._startingApps.filter(item => item !== app);
+        }
+        this._sync();
+    }
+
+    _focusAppChanged() {
+        const focusedApp = Shell.WindowTracker.get_default().focus_app;
+        if (!focusedApp && global.stage.key_focus !== null)
+            return;
+        this._sync();
+    }
+
+    _findTargetApp() {
+        const workspace = global.workspace_manager.get_active_workspace();
+        const tracker = Shell.WindowTracker.get_default();
+        const focusedApp = tracker.focus_app;
+        if (focusedApp && focusedApp.is_on_workspace(workspace))
+            return focusedApp;
+        for (const app of this._startingApps) {
+            if (app.is_on_workspace(workspace))
+                return app;
+        }
+        return null;
+    }
+
+    _sync() {
+        const targetApp = this._findTargetApp();
+        if (this._targetApp !== targetApp) {
+            this._targetApp?.disconnectObject(this);
+            this._targetApp = targetApp;
+            if (targetApp) {
+                targetApp.connectObject('notify::busy', () => this._sync(), this);
+                this._label.set_text(targetApp.get_name());
+                this.set_accessible_name(targetApp.get_name());
+                this._syncIcon(targetApp);
+            }
+        }
+
+        const visible = targetApp !== null && !Main.overview.visibleTarget;
+        if (visible)
+            this.fadeIn();
+        else
+            this.fadeOut();
+
+        const busy = targetApp !== null &&
+            (targetApp.get_state() === Shell.AppState.STARTING || targetApp.get_busy());
+        if (busy)
+            this._spinner.play();
+        else
+            this._spinner.stop();
+
+        this.reactive = visible && !busy;
+        this.menu.setApp(targetApp);
+        this.emit('changed');
+    }
+
+    fadeIn() {
+        if (this._visible)
+            return;
+        this._visible = true;
+        this.reactive = true;
+        this.remove_all_transitions();
+        this.ease({opacity: 255, duration: ANIMATION_TIME, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+    }
+
+    fadeOut() {
+        if (!this._visible)
+            return;
+        this._visible = false;
+        this.reactive = false;
+        this.remove_all_transitions();
+        this.ease({opacity: 0, duration: ANIMATION_TIME, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+    }
+
+    destroy() {
+        this._targetApp?.disconnectObject(this);
+        Shell.WindowTracker.get_default().disconnectObject(this);
+        Shell.AppSystem.get_default().disconnectObject(this);
+        St.TextureCache.get_default().disconnectObject(this);
+        global.window_manager?.disconnectObject(this);
+        Main.overview.disconnectObject(this);
+        super.destroy();
+    }
+});
+
+const PANEL_ITEM_IMPLEMENTATIONS = {
+    activities: ActivitiesButton,
+    appMenu: AppMenuButton,
+    dateMenu: DateMenuButton,
+    quickSettings: QuickSettings,
+    a11y: ATIndicator,
+    keyboard: InputSourceIndicator,
+    dwellClick: DwellClickIndicator,
+    screenRecording: ScreenRecordingIndicator,
+    screenSharing: ScreenSharingIndicator,
+};
+
+export const SecondaryPanel = GObject.registerClass(
+class SecondaryPanel extends St.Widget {
+    _init(monitorIndex, settings, connector = null) {
+        super._init({name: 'panel', reactive: true});
+        this.add_style_class_name('multimonitor-panel');
         this.set_offscreen_redirect(Clutter.OffscreenRedirect.ALWAYS);
 
-        this._sessionStyle = null;
+        this._monitorIndex = monitorIndex;
+        this._settings = settings;
+        this._key = monitorKey(
+            monitorIndex, Main.layoutManager.primaryIndex, connector);
+        this._destroyed = false;
+        this._panelColorStyle = null;
+        this._externalMirrors = new Map();
 
         this.statusArea = {};
-
         this.menuManager = new PopupMenu.PopupMenuManager(this);
 
         this._leftBox = new St.BoxLayout({name: 'panelLeft'});
@@ -450,43 +655,43 @@ class Panel extends St.Widget {
         this._rightBox = new St.BoxLayout({name: 'panelRight'});
         this.add_child(this._rightBox);
 
-        this._clickGesture = new Clutter.ClickGesture({
-            recognize_on_press: true,
-        });
-        this._clickGesture.connect(
-            'recognize', this._onWindowDragGestureRecognize.bind(this));
-        this.add_action_full(
-            'window-drag', Clutter.EventPhase.TARGET, this._clickGesture);
+        this._clickGesture = new Clutter.ClickGesture({recognize_on_press: true});
+        this._clickGesture.connect('recognize', this._onWindowDragGestureRecognize.bind(this));
+        this.add_action_full('window-drag', Clutter.EventPhase.TARGET, this._clickGesture);
 
-        Main.overview.connectObject('showing',
-            () => this.add_style_pseudo_class('overview'),
-            this);
-        Main.overview.connectObject('hiding',
-            () => this.remove_style_pseudo_class('overview'),
-            this);
+        Main.overview.connectObject(
+            'showing', () => this.add_style_pseudo_class('overview'),
+            'hiding', () => this.remove_style_pseudo_class('overview'), this);
 
-        Main.layoutManager.panelBox.add_child(this);
-        Main.ctrlAltTabManager.addGroup(this,
-            _('Top Bar'), 'shell-focus-top-bar-symbolic',
-            {sortGroup: CtrlAltTab.SortGroup.TOP});
+        Main.sessionMode.connectObject('updated', () => this._updatePanel(), this);
+        global.display.connectObject('workareas-changed', () => this.queue_relayout(), this);
 
-        Main.sessionMode.connectObject('updated',
-            this._updatePanel.bind(this),
-            this);
+        for (const key of ['show-activities', 'show-app-menu', 'show-date-time',
+            'show-status-indicators', 'date-time-position', 'monitor-indicator-visibility']) {
+            settings.connectObject(`changed::${key}`, () => this._updatePanel(), this);
+        }
+        for (const key of ['panel-color', 'monitor-panel-layout']) {
+            settings.connectObject(`changed::${key}`, () => this._applyColor(), this);
+        }
 
-        global.display.connectObject('workareas-changed',
-            () => this.queue_relayout(),
-            this);
         this._updatePanel();
     }
 
+    get monitorIndex() {
+        return this._monitorIndex;
+    }
+
+    get settingsKey() {
+        return this._key;
+    }
+
+    _monitor() {
+        return Main.layoutManager.monitors[this._monitorIndex] ?? null;
+    }
+
     vfunc_get_preferred_width(_forHeight) {
-        const primaryMonitor = Main.layoutManager.primaryMonitor;
-
-        if (primaryMonitor)
-            return [0, primaryMonitor.width];
-
-        return [0,  0];
+        const monitor = this._monitor();
+        return [0, monitor?.width ?? 0];
     }
 
     vfunc_allocate(box) {
@@ -500,9 +705,7 @@ class Panel extends St.Widget {
         const [, rightNaturalWidth] = this._rightBox.get_preferred_width(-1);
 
         const centerWidth = centerNaturalWidth;
-
-        // get workspace area and center date entry relative to it
-        const monitor = Main.layoutManager.findMonitorForActor(this);
+        const monitor = this._monitor();
         let centerOffset = 0;
         if (monitor) {
             const workArea = Main.layoutManager.getWorkAreaForMonitor(monitor.index);
@@ -510,15 +713,12 @@ class Panel extends St.Widget {
         }
 
         const sideWidth = Math.max(0, (allocWidth - centerWidth + centerOffset) / 2);
-
         const childBox = new Clutter.ActorBox();
 
         childBox.y1 = 0;
         childBox.y2 = allocHeight;
         if (this.get_text_direction() === Clutter.TextDirection.RTL) {
-            childBox.x1 = Math.max(
-                allocWidth - Math.min(Math.floor(sideWidth), leftNaturalWidth),
-                0);
+            childBox.x1 = Math.max(allocWidth - Math.min(Math.floor(sideWidth), leftNaturalWidth), 0);
             childBox.x2 = allocWidth;
         } else {
             childBox.x1 = 0;
@@ -538,9 +738,7 @@ class Panel extends St.Widget {
             childBox.x1 = 0;
             childBox.x2 = Math.min(Math.floor(sideWidth), rightNaturalWidth);
         } else {
-            childBox.x1 = Math.max(
-                allocWidth - Math.min(Math.floor(sideWidth), rightNaturalWidth),
-                0);
+            childBox.x1 = Math.max(allocWidth - Math.min(Math.floor(sideWidth), rightNaturalWidth), 0);
             childBox.x2 = allocWidth;
         }
         this._rightBox.allocate(childBox);
@@ -631,123 +829,270 @@ class Panel extends St.Widget {
         return this._leftBox.opacity;
     }
 
+    _roleEnabled(role) {
+        return indicatorIsEnabled(this._settings, this._key, role);
+    }
+
+    _removeRole(roles, role) {
+        const index = roles.indexOf(role);
+        if (index !== -1)
+            roles.splice(index, 1);
+    }
+
+    _desiredRoles() {
+        const session = Main.sessionMode.panel;
+        let left = [...session.left].filter(role => this._roleEnabled(role));
+        let center = [...session.center].filter(role => this._roleEnabled(role));
+        let right = [...session.right].filter(role => this._roleEnabled(role));
+
+        // GNOME 45+ session modes dropped appMenu; Ubuntu still exposes it.
+        if (this._roleEnabled('appMenu')) {
+            const activitiesIndex = left.indexOf('activities');
+            if (!left.includes('appMenu'))
+                left.splice(activitiesIndex + 1, 0, 'appMenu');
+        }
+
+        const position = DATE_POSITIONS.includes(this._settings.get_string('date-time-position'))
+            ? this._settings.get_string('date-time-position')
+            : 'center';
+
+        this._removeRole(left, 'dateMenu');
+        this._removeRole(center, 'dateMenu');
+        this._removeRole(right, 'dateMenu');
+        if (this._roleEnabled('dateMenu')) {
+            if (position === 'left')
+                left.push('dateMenu');
+            else if (position === 'right-before-tray')
+                right.unshift('dateMenu');
+            else if (position === 'right-after-tray')
+                right.push('dateMenu');
+            else
+                center.push('dateMenu');
+        }
+
+        return {left, center, right};
+    }
+
     _updatePanel() {
-        const panel = Main.sessionMode.panel;
-        this._hideIndicators();
-        this._updateBox(panel.left, this._leftBox);
-        this._updateBox(panel.center, this._centerBox);
-        this._updateBox(panel.right, this._rightBox);
+        if (this._destroyed)
+            return;
 
-        if (panel.left.includes('dateMenu'))
-            Main.messageTray.bannerAlignment = Clutter.ActorAlign.START;
-        else if (panel.right.includes('dateMenu'))
-            Main.messageTray.bannerAlignment = Clutter.ActorAlign.END;
-        // Default to center if there is no dateMenu
-        else
-            Main.messageTray.bannerAlignment = Clutter.ActorAlign.CENTER;
+        const desired = this._desiredRoles();
+        const hidden = new Set();
+        for (const role of Object.keys(PANEL_ITEM_IMPLEMENTATIONS)) {
+            const indicator = this.statusArea[role];
+            if (indicator)
+                hidden.add(indicator);
+            indicator?.container.hide();
+        }
 
-        if (this._sessionStyle)
-            this.remove_style_class_name(this._sessionStyle);
+        const all = [
+            ...desired.left.map(role => [role, this._leftBox]),
+            ...desired.center.map(role => [role, this._centerBox]),
+            ...desired.right.map(role => [role, this._rightBox]),
+        ];
 
-        this._sessionStyle = Main.sessionMode.panelStyle;
-        if (this._sessionStyle)
-            this.add_style_class_name(this._sessionStyle);
+        for (const [role, box] of all) {
+            const indicator = this._ensureIndicator(role);
+            if (!indicator)
+                continue;
+            this._addToPanelBox(role, indicator, box);
+            hidden.delete(indicator);
+        }
+
+        this._applyColor();
+        this._syncExternalIndicators();
+        this.queue_relayout();
     }
 
     _hideIndicators() {
         for (const role in PANEL_ITEM_IMPLEMENTATIONS) {
             const indicator = this.statusArea[role];
-            if (!indicator)
-                continue;
-            indicator.container.hide();
+            if (indicator)
+                indicator.container.hide();
         }
     }
 
     _ensureIndicator(role) {
         let indicator = this.statusArea[role];
-        if (!indicator) {
-            const constructor = PANEL_ITEM_IMPLEMENTATIONS[role];
-            if (!constructor) {
-                // This icon is not implemented (this is a bug)
-                return null;
-            }
-            indicator = new constructor(this);
-            this.statusArea[role] = indicator;
-        }
+        if (indicator)
+            return indicator;
+
+        const Constructor = PANEL_ITEM_IMPLEMENTATIONS[role];
+        if (!Constructor)
+            return null;
+
+        indicator = Constructor === AppMenuButton ? new AppMenuButton(this) : new Constructor();
+        this.statusArea[role] = indicator;
         return indicator;
     }
 
-    _updateBox(elements, box) {
-        const nChildren = box.get_n_children();
-
-        for (let i = 0; i < elements.length; i++) {
-            const role = elements[i];
-            const indicator = this._ensureIndicator(role);
-            if (indicator == null)
-                continue;
-
-            this._addToPanelBox(role, indicator, i + nChildren, box);
-        }
-    }
-
-    _addToPanelBox(role, indicator, position, box) {
+    _addToPanelBox(role, indicator, box) {
         const container = indicator.container;
         container.show();
 
         const parent = container.get_parent();
         if (parent)
             parent.remove_child(container);
+        box.add_child(container);
 
-
-        box.insert_child_at_index(container, position);
         this.statusArea[role] = indicator;
-        const destroyId = indicator.connect('destroy', emitter => {
-            delete this.statusArea[role];
-            emitter.disconnect(destroyId);
-        });
-        indicator.connect('menu-set', this._onMenuSet.bind(this));
+
+        if (!indicator._secondaryDestroyId) {
+            indicator._secondaryDestroyId = indicator.connect('destroy', emitter => {
+                delete this.statusArea[role];
+                emitter._secondaryDestroyId = 0;
+            });
+        }
+        if (!indicator._secondaryMenuId) {
+            indicator._secondaryMenuId = indicator.connect('menu-set',
+                () => this._onMenuSet(indicator));
+        }
         this._onMenuSet(indicator);
     }
 
     addToStatusArea(role, indicator, position, box) {
-        if (this.statusArea[role])
-            throw new Error(`Extension point conflict: there is already a status indicator for role ${role}`);
+        if (this.statusArea[role]) {
+            const previous = this.statusArea[role];
+            if (previous !== indicator)
+                previous.destroy();
+            delete this.statusArea[role];
+        }
 
         if (!(indicator instanceof PanelMenu.Button))
             throw new TypeError('Status indicator must be an instance of PanelMenu.Button');
 
-        position ??= 0;
         const boxes = {
             left: this._leftBox,
             center: this._centerBox,
             right: this._rightBox,
         };
-        const boxContainer = boxes[box] || this._rightBox;
+        const target = boxes[box] ?? this._rightBox;
+        const container = indicator.container;
+        container.show();
+
+        const parent = container.get_parent();
+        if (parent)
+            parent.remove_child(container);
+        target.insert_child_at_index(container, Math.max(0, position ?? 0));
+
         this.statusArea[role] = indicator;
-        this._addToPanelBox(role, indicator, position, boxContainer);
+        indicator.connect('destroy', emitter => {
+            if (this.statusArea[role] === emitter)
+                delete this.statusArea[role];
+        });
+        indicator.connect('menu-set', () => this._onMenuSet(indicator));
+        this._onMenuSet(indicator);
         return indicator;
     }
 
     _onMenuSet(indicator) {
-        if (!indicator.menu || indicator.menu._openChangedConnected)
+        const menu = indicator.menu;
+        if (!menu || menu._openChangedConnected)
+            return;
+        this.menuManager.addMenu(menu);
+        menu._openChangedConnected = true;
+    }
+
+    _syncExternalIndicators() {
+        if (this._destroyed || !Main.panel?.statusArea)
             return;
 
-        this.menuManager.addMenu(indicator.menu);
+        const roleByContainer = new Map();
+        for (const [role, indicator] of Object.entries(Main.panel.statusArea)) {
+            if (indicator?.container)
+                roleByContainer.set(indicator.container, role);
+        }
 
-        indicator.menu._openChangedConnected = true;
-        indicator.menu.connectObject('open-state-changed',
-            (menu, isOpen) => {
-                let boxAlignment;
-                if (this._leftBox.contains(indicator.container))
-                    boxAlignment = Clutter.ActorAlign.START;
-                else if (this._centerBox.contains(indicator.container))
-                    boxAlignment = Clutter.ActorAlign.CENTER;
-                else if (this._rightBox.contains(indicator.container))
-                    boxAlignment = Clutter.ActorAlign.END;
+        const primaryChildren = Main.panel._rightBox?.get_children() ?? [];
+        const wanted = new Set();
+        const externalRoles = [];
+        for (const container of primaryChildren) {
+            const role = roleByContainer.get(container);
+            if (!role || EXCLUDED_MIRROR_ROLES.includes(role))
+                continue;
+            if (!this._roleEnabled(role))
+                continue;
+            wanted.add(role);
+            externalRoles.push(role);
+        }
 
-                if (boxAlignment === Main.messageTray.bannerAlignment)
-                    Main.messageTray.bannerBlocked = isOpen;
-            }, this);
+        for (const [role, mirror] of [...this._externalMirrors]) {
+            if (!wanted.has(role)) {
+                mirror.destroy();
+                this._externalMirrors.delete(role);
+            }
+        }
+
+        for (const role of externalRoles) {
+            if (this._externalMirrors.has(role))
+                continue;
+            const source = Main.panel.statusArea[role];
+            const mirror = new StatusIndicatorMirror(this, role, source);
+            mirror.connect('destroy', () => this._externalMirrors.delete(role));
+            this._externalMirrors.set(role, mirror);
+            this.addToStatusArea(role, mirror, 0, this._rightBox);
+        }
+
+        this._syncExternalOrder(primaryChildren, roleByContainer, wanted);
+    }
+
+    _syncExternalOrder(primaryChildren, roleByContainer, externalRoles) {
+        let anchor = null;
+        for (const container of primaryChildren) {
+            const role = roleByContainer.get(container);
+            if (!role)
+                continue;
+
+            if (externalRoles.has(role)) {
+                const mirror = this._externalMirrors.get(role)?.container;
+                if (!mirror || !this._rightBox.contains(mirror))
+                    continue;
+                const children = this._rightBox.get_children();
+                const currentIndex = children.indexOf(mirror);
+                const anchorIndex = anchor ? children.indexOf(anchor) : -1;
+                const desiredIndex = anchorIndex === -1 ? 0 : anchorIndex + 1;
+                if (currentIndex !== desiredIndex) {
+                    this._rightBox.remove_child(mirror);
+                    const updatedAnchorIndex = anchor
+                        ? this._rightBox.get_children().indexOf(anchor)
+                        : -1;
+                    this._rightBox.insert_child_at_index(
+                        mirror,
+                        updatedAnchorIndex === -1 ? 0 : updatedAnchorIndex + 1);
+                }
+                anchor = mirror;
+                continue;
+            }
+
+            const builtin = this.statusArea[role]?.container;
+            if (builtin && this._rightBox.contains(builtin))
+                anchor = builtin;
+        }
+    }
+
+    _applyColor() {
+        const color = panelColor(this._settings, this._key);
+        const next = panelColorDeclaration(color);
+        this.style = mergePanelColorStyle(this.style, this._panelColorStyle, next);
+        this._panelColorStyle = next;
+    }
+
+    destroy() {
+        if (this._destroyed)
+            return;
+        this._destroyed = true;
+
+        this._settings.disconnectObject(this);
+        Main.overview.disconnectObject(this);
+        Main.sessionMode.disconnectObject(this);
+        global.display.disconnectObject(this);
+
+        for (const mirror of this._externalMirrors.values())
+            mirror.destroy();
+        this._externalMirrors.clear();
+
+        super.destroy();
     }
 
     _getDraggableWindowForPosition(stageX) {
@@ -758,7 +1103,7 @@ class Panel extends St.Widget {
 
         return allWindowsByStacking.find(metaWindow => {
             const rect = metaWindow.get_frame_rect();
-            return metaWindow.is_on_primary_monitor() &&
+            return metaWindow.get_monitor() === this._monitorIndex &&
                    metaWindow.showing_on_its_workspace() &&
                    metaWindow.get_window_type() !== Meta.WindowType.DESKTOP &&
                    metaWindow.maximized_vertically &&
