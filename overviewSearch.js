@@ -27,6 +27,7 @@ let showingId = 0;
 let shownId = 0;
 let hidingId = 0;
 let monitorsChangedId = 0;
+let primaryFocusInId = 0;
 let pendingFocusId = 0;
 
 function primaryIndex() {
@@ -69,19 +70,36 @@ function monitorForActor(actor) {
 }
 
 function targetMonitor() {
+    // The Activities-button hint is the strongest signal when the overview
+    // opens, followed by whatever search widget already owns key focus.
+    if (requestedMonitor !== null)
+        return requestedMonitor;
     const focusMonitor = monitorForActor(global.stage?.get_key_focus?.());
     if (focusMonitor !== null)
         return focusMonitor;
     if (activeMonitor !== null)
         return activeMonitor;
-    if (requestedMonitor !== null)
-        return requestedMonitor;
     return monitorAtPointer();
 }
 
 /** Set a one-shot focus hint from a secondary Activities button. */
 export function requestOverviewSearchMonitor(monitorIndex) {
     requestedMonitor = monitorIndex === primaryIndex() ? null : monitorIndex;
+}
+
+/**
+ * Change the monitor that owns overview search focus. This is intentionally
+ * only called by explicit actions (a search box receiving key focus from a
+ * click/Tab, or the overview being opened on a monitor); pointer movement and
+ * transient focus resets must never change it.
+ */
+function setFocusedMonitor(monitorIndex) {
+    if (activeMonitor !== monitorIndex) {
+        activeMonitor = monitorIndex;
+        console.log(`[MMBv2 search] search focus locked to monitor ${
+            monitorIndex === null ? 'primary' : monitorIndex}`);
+    }
+    syncStageHandlers();
 }
 
 function setHandlerBlocked(id, block) {
@@ -102,16 +120,11 @@ function setHandlerBlocked(id, block) {
  * handlers without modifying any of their code.
  */
 export function syncStageHandlers() {
-    const focusMonitor = monitorForActor(global.stage?.get_key_focus?.());
-    if (focusMonitor !== null)
-        activeMonitor = focusMonitor === primaryIndex() ? null : focusMonitor;
-
-    // Keep the last secondary search monitor active if a transient reset
-    // temporarily clears key focus (e.g. deleting the last search term).
-    const effectiveMonitor = focusMonitor ?? activeMonitor;
-    const activeId = effectiveMonitor === null || effectiveMonitor === primaryIndex()
+    // `activeMonitor` is sticky for the whole overview session. It is only
+    // changed by setFocusedMonitor(), never by a transient key-focus change.
+    const activeId = activeMonitor === null || activeMonitor === primaryIndex()
         ? Main.overview?.searchController?._stageKeyPressId
-        : controllers.get(effectiveMonitor)?.controller?._stageKeyPressId;
+        : controllers.get(activeMonitor)?.controller?._stageKeyPressId;
 
     const liveIds = new Set();
     const primary = Main.overview?.searchController;
@@ -199,10 +212,8 @@ function createController(monitorIndex) {
     };
     box.searchActiveId = controller.connect('notify::search-active',
         () => updateSearchVisibility(box));
-    box.focusInId = entry.connect('key-focus-in', () => {
-        activeMonitor = monitorIndex;
-        syncStageHandlers();
-    });
+    box.focusInId = entry.connect('key-focus-in',
+        () => setFocusedMonitor(monitorIndex));
 
     // GNOME resets search when the text becomes empty. Keep focus on our entry
     // so the next keystroke does not fall through to the primary search box.
@@ -322,6 +333,7 @@ export function focusSearchOn(monitorIndex) {
     const box = controllers.get(monitorIndex);
     if (!box?.display)
         return false;
+    setFocusedMonitor(monitorIndex);
     box.entry.grab_key_focus();
     syncStageHandlers();
     return true;
@@ -371,7 +383,28 @@ function onMonitorsChanged() {
         if (i !== primaryIndex())
             ensureController(i);
     }
+    if (activeMonitor !== null && !controllers.has(activeMonitor))
+        activeMonitor = null;
     syncStageHandlers();
+}
+
+function connectPrimaryEntryFocus() {
+    if (primaryFocusInId)
+        return;
+    const entry = Main.overview?.searchEntry;
+    if (!entry)
+        return;
+    // Explicitly focusing the primary search box is the only way to hand
+    // control back to GNOME's controller after a secondary one took over.
+    primaryFocusInId = entry.connect('key-focus-in',
+        () => setFocusedMonitor(null));
+}
+
+function disconnectPrimaryEntryFocus() {
+    if (!primaryFocusInId)
+        return;
+    Main.overview?.searchEntry?.disconnect(primaryFocusInId);
+    primaryFocusInId = 0;
 }
 
 export function applyOverviewSearch() {
@@ -387,6 +420,7 @@ export function applyOverviewSearch() {
     }
     monitorsChangedId = Main.layoutManager.connect('monitors-changed', onMonitorsChanged);
     onMonitorsChanged();
+    connectPrimaryEntryFocus();
     console.log('[MMBv2 search] independent search patch applied');
 }
 
@@ -409,6 +443,7 @@ export function revertOverviewSearch() {
         Main.overview.disconnect(hidingId);
     if (monitorsChangedId)
         Main.layoutManager.disconnect(monitorsChangedId);
+    disconnectPrimaryEntryFocus();
     focusId = showingId = shownId = hidingId = monitorsChangedId = 0;
 
     for (const id of [...blockedHandlers]) {
