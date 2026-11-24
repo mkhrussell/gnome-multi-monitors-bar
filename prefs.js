@@ -44,10 +44,19 @@ function clearPreferencesGroup(group) {
         group.remove_all();
         return;
     }
+    if (typeof group.get_rows === 'function') {
+        for (const row of [...group.get_rows()])
+            group.remove(row);
+        return;
+    }
     let child = group.get_first_child?.();
     while (child) {
         const next = child.get_next_sibling();
-        group.remove(child);
+        try {
+            group.remove(child);
+        } catch {
+            // Ignore internal children.
+        }
         child = next;
     }
 }
