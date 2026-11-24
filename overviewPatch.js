@@ -17,6 +17,18 @@ const gi = globalThis.imports?._gi;
 const HOOK_UP_VFUNC = gi?.hook_up_vfunc_symbol ??
     findSymbol(GObject.Object.prototype, '__GObject__hook_up_vfunc');
 
+// Leave only enough vertical headroom for a thin slice of the neighbouring
+// workspace to peek in, without noticeably shrinking the previews again.
+const MIN_WORKSPACE_EDGE = 8;
+
+function heightRatioForEdge(width) {
+    if (!(width > 0))
+        return 1;
+    const desiredEdge = Math.max(MIN_WORKSPACE_EDGE, Math.round(width * 0.01));
+    const ratio = 1 - 2 * (desiredEdge + MIN_WORKSPACE_EDGE) / width;
+    return Math.max(0.85, ratio);
+}
+
 let hookedPrototype = null;
 let originalAllocate = null;
 let originalUpdateWorkspacesViews = null;
@@ -67,11 +79,12 @@ function patchedAllocate(box) {
         const finalBox = this._getWorkspacesBoxForState(finalState, ...workspaceParams);
         workspacesBox = initialBox.interpolate(finalBox, progress);
     }
-    if (topInset > 0) {
-        workspacesBox.set_origin(workspacesBox.x1, workspacesBox.y1 + topInset);
-        workspacesBox.set_size(workspacesBox.get_width(),
-            Math.max(1, workspacesBox.get_height() - topInset));
-    }
+    const availableHeight = Math.max(1, workspacesBox.get_height() - topInset);
+    const finalHeight = Math.max(1,
+        Math.round(availableHeight * heightRatioForEdge(width)));
+    workspacesBox.set_origin(workspacesBox.x1,
+        workspacesBox.y1 + topInset + Math.round((availableHeight - finalHeight) / 2));
+    workspacesBox.set_size(workspacesBox.get_width(), finalHeight);
     this._workspacesView.allocate(workspacesBox);
 }
 
