@@ -251,10 +251,12 @@ function createController(monitorIndex) {
         }
     };
 
-    // Avoid re-injecting a key into an entry that already owns focus.
+    // Only inject the first keystroke when no search widget owns focus. If a
+    // search entry (primary or another monitor) already has focus, the normal
+    // event delivery handles it; re-injecting here duplicates the character.
     const originalStartSearch = controller.startSearch.bind(controller);
     controller.startSearch = event => {
-        if (monitorForActor(global.stage.get_key_focus()) === monitorIndex)
+        if (monitorForActor(global.stage.get_key_focus()) !== null)
             return;
         originalStartSearch(event);
     };
