@@ -7,6 +7,7 @@ import {
     refreshMonitorConnectors,
 } from './monitorIdentity.js';
 import {setTranslator} from './settings.js';
+import {applyOverviewPatch, revertOverviewPatch} from './overviewPatch.js';
 
 setTranslator(_);
 
@@ -14,6 +15,8 @@ export default class GNOMEMultiMonitorsBarV2Extension extends Extension {
     enable() {
         this._settings = this.getSettings();
         migrateMonitorSettings(this._settings);
+
+        applyOverviewPatch();
 
         this._connectorsReady = false;
         refreshMonitorConnectors(() => {
@@ -31,6 +34,7 @@ export default class GNOMEMultiMonitorsBarV2Extension extends Extension {
         this._manager?.destroy();
         this._manager = null;
 
+        revertOverviewPatch();
         clearIdentityConnectors();
         this._settings = null;
     }
