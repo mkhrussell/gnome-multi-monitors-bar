@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="gnome-multi-monitors-bar-v2">
-  <schema id="org.gnome.shell.extensions.gnome-multi-monitors-bar-v2"
-          path="/org/gnome/shell/extensions/gnome-multi-monitors-bar-v2/">
+<schemalist gettext-domain="gnome-multi-monitors-bar">
+  <schema id="org.gnome.shell.extensions.gnome-multi-monitors-bar"
+          path="/org/gnome/shell/extensions/gnome-multi-monitors-bar/">
 
     <key name="show-panel" type="b">
       <default>true</default>

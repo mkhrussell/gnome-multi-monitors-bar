@@ -1,4 +1,4 @@
-# GNOME Multi Monitors Bar V2
+# GNOME Multi Monitors Bar
 
 A GNOME Shell extension that adds top bars to additional monitors.
 
@@ -10,8 +10,8 @@ provenance and diffing.
 ## Target
 
 - GNOME Shell 50+ (developed against Ubuntu 26.04 / GNOME Shell 50.1)
-- Extension UUID: `gnome-multi-monitors-bar-v2@kamrul`
-- Schema: `org.gnome.shell.extensions.gnome-multi-monitors-bar-v2`
+- Extension UUID: `gnome-multi-monitors-bar@kamrul`
+- Schema: `org.gnome.shell.extensions.gnome-multi-monitors-bar`
 
 ## What it does
 

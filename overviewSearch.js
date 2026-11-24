@@ -45,7 +45,7 @@ function monitorAtPointer() {
             }
         }
     } catch (e) {
-        console.warn(`[MMBv2 search] pointer monitor lookup failed: ${e.message}`);
+        console.warn(`[MMB search] pointer monitor lookup failed: ${e.message}`);
     }
     return primaryIndex();
 }
@@ -95,7 +95,7 @@ export function requestOverviewSearchMonitor(monitorIndex) {
 function setFocusedMonitor(monitorIndex) {
     if (activeMonitor !== monitorIndex) {
         activeMonitor = monitorIndex;
-        console.log(`[MMBv2 search] search focus locked to monitor ${
+        console.log(`[MMB search] search focus locked to monitor ${
             monitorIndex === null ? 'primary' : monitorIndex}`);
     }
     syncStageHandlers();
@@ -260,7 +260,7 @@ function createController(monitorIndex) {
     };
 
     controllers.set(monitorIndex, box);
-    console.log(`[MMBv2 search] independent controller created for monitor ${monitorIndex}`);
+    console.log(`[MMB search] independent controller created for monitor ${monitorIndex}`);
     return box;
 }
 
@@ -319,7 +319,7 @@ export function attachToDisplay(display, monitorIndex) {
 
     display.queue_relayout();
     syncStageHandlers();
-    console.log(`[MMBv2 search] attached independent search to monitor ${monitorIndex}`);
+    console.log(`[MMB search] attached independent search to monitor ${monitorIndex}`);
 }
 
 /**
@@ -421,7 +421,7 @@ export function applyOverviewSearch() {
     }
     monitorsChangedId = Main.layoutManager.connect('monitors-changed', onMonitorsChanged);
     onMonitorsChanged();
-    console.log('[MMBv2 search] independent search patch applied');
+    console.log('[MMB search] independent search patch applied');
 }
 
 export function revertOverviewSearch() {
@@ -453,5 +453,5 @@ export function revertOverviewSearch() {
         destroyController(monitorIndex);
     requestedMonitor = null;
     activeMonitor = null;
-    console.log('[MMBv2 search] independent search patch reverted');
+    console.log('[MMB search] independent search patch reverted');
 }

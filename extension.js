@@ -12,7 +12,7 @@ import {applyOverviewSearch, revertOverviewSearch} from './overviewSearch.js';
 
 setTranslator(_);
 
-export default class GNOMEMultiMonitorsBarV2Extension extends Extension {
+export default class GNOMEMultiMonitorsBarExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         migrateMonitorSettings(this._settings);

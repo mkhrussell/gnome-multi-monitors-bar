@@ -68,7 +68,7 @@ function comboRow(title, values, selected, onChanged) {
     return row;
 }
 
-export default class GNOMEMultiMonitorsBarV2Preferences extends ExtensionPreferences {
+export default class GNOMEMultiMonitorsBarPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const signalIds = [];

@@ -37,7 +37,7 @@ let loggedFirstAllocation = false;
 function patchedAllocate(box) {
     if (!loggedFirstAllocation) {
         loggedFirstAllocation = true;
-        console.log('[MMBv2 overview] patched allocation active on secondary monitor');
+        console.log('[MMB overview] patched allocation active on secondary monitor');
     }
     this.set_allocation(box);
 
@@ -94,21 +94,21 @@ export function applyOverviewPatch() {
 
     const proto = WorkspacesView.SecondaryMonitorDisplay?.prototype;
     if (!proto) {
-        console.warn('[MMBv2 overview] SecondaryMonitorDisplay not found; patch skipped');
+        console.warn('[MMB overview] SecondaryMonitorDisplay not found; patch skipped');
         return;
     }
 
     const gobjectPrototype = gi?.gobject_prototype_symbol ??
         findSymbol(proto, '__GObject__prototype');
     if (!HOOK_UP_VFUNC || typeof proto[gobjectPrototype]?.[HOOK_UP_VFUNC] !== 'function') {
-        console.warn('[MMBv2 overview] GJS vfunc hook unavailable; patch skipped');
+        console.warn('[MMB overview] GJS vfunc hook unavailable; patch skipped');
         return;
     }
 
     const giPrototype = proto[gobjectPrototype];
     const original = proto.vfunc_allocate;
     if (typeof original !== 'function') {
-        console.warn('[MMBv2 overview] vfunc_allocate not found; patch skipped');
+        console.warn('[MMB overview] vfunc_allocate not found; patch skipped');
         return;
     }
 
@@ -131,7 +131,7 @@ export function applyOverviewPatch() {
         };
     }
 
-    console.log('[MMBv2 overview] secondary-monitor workspace scaling disabled');
+    console.log('[MMB overview] secondary-monitor workspace scaling disabled');
 }
 
 export function revertOverviewPatch() {
@@ -148,5 +148,5 @@ export function revertOverviewPatch() {
     originalAllocate = null;
     originalUpdateWorkspacesViews = null;
     loggedFirstAllocation = false;
-    console.log('[MMBv2 overview] patch reverted');
+    console.log('[MMB overview] patch reverted');
 }

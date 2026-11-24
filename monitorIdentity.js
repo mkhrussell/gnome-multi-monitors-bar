@@ -50,7 +50,7 @@ export function refreshMonitorConnectors(onChanged) {
                 reply = _connection.call_finish(result);
             } catch (error) {
                 if (!error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-                    console.warn(`[MultiMonitorsBarV2] Could not read connectors: ${error.message}`);
+                    console.warn(`[MultiMonitorsBar] Could not read connectors: ${error.message}`);
                 return;
             }
 
