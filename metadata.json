@@ -1,0 +1,13 @@
+{
+    "shell-version": [
+        "50",
+        "51"
+    ],
+    "uuid": "gnome-multi-monitors-bar-v2@kamrul",
+    "name": "GNOME Multi Monitors Bar V2",
+    "description": "Adds GNOME Shell top bars to additional monitors, based on Ubuntu's GNOME Shell panel code with multi-monitor adaptations.",
+    "settings-schema": "org.gnome.shell.extensions.gnome-multi-monitors-bar-v2",
+    "gettext-domain": "gnome-multi-monitors-bar-v2",
+    "version": 1,
+    "url": "https://github.com/mkhrussell/gnome-multi-monitors-bar"
+}
