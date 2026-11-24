@@ -49,6 +49,7 @@ import {ScreenRecordingIndicator, ScreenSharingIndicator} from 'resource:///org/
 
 import {gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {requestOverviewSearchMonitor} from './overviewSearch.js';
 import {StatusIndicatorMirror} from './statusMirror.js';
 import {
     BUILTIN_ROLES,
@@ -251,10 +252,19 @@ class ActivitiesButton extends PanelMenu.Button {
 
         this._clickGesture = new Clutter.ClickGesture();
         this._clickGesture.connect('recognize', () => {
-            if (Main.overview.shouldToggleByCornerOrButton())
+            if (Main.overview.shouldToggleByCornerOrButton()) {
+                this._requestSearchFocus();
                 Main.overview.toggle();
+            }
         });
         this.add_action(this._clickGesture);
+    }
+
+    _requestSearchFocus() {
+        if (Main.overview.visibleTarget)
+            return;
+        const index = Main.layoutManager.findIndexForActor(this);
+        requestOverviewSearchMonitor(index);
     }
 
     handleDragOver(source, _actor, _x, _y, _time) {
@@ -279,6 +289,7 @@ class ActivitiesButton extends PanelMenu.Button {
         const symbol = event.get_key_symbol();
         if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_space) {
             if (Main.overview.shouldToggleByCornerOrButton()) {
+                this._requestSearchFocus();
                 Main.overview.toggle();
                 return Clutter.EVENT_STOP;
             }
@@ -291,8 +302,10 @@ class ActivitiesButton extends PanelMenu.Button {
         const [x, y] = global.get_pointer();
         const pickedActor = global.stage.get_actor_at_pos(Clutter.PickMode.REACTIVE, x, y);
 
-        if (pickedActor === this && Main.overview.shouldToggleByCornerOrButton())
+        if (pickedActor === this && Main.overview.shouldToggleByCornerOrButton()) {
+            this._requestSearchFocus();
             Main.overview.toggle();
+        }
 
         GLib.source_remove(this._xdndTimeOut);
         this._xdndTimeOut = 0;

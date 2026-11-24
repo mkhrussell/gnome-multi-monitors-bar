@@ -2,6 +2,8 @@ import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import * as WorkspacesView from 'resource:///org/gnome/shell/ui/workspacesView.js';
 
+import * as OverviewSearch from './overviewSearch.js';
+
 // GJS internals needed to replace a vfunc on an already-registered GObject
 // class. Assigning to `prototype.vfunc_allocate` is NOT enough: the method is
 // copied into the GLib class struct at registration time, so plain monkey
@@ -17,6 +19,7 @@ const HOOK_UP_VFUNC = gi?.hook_up_vfunc_symbol ??
 
 let hookedPrototype = null;
 let originalAllocate = null;
+let originalUpdateWorkspacesViews = null;
 let loggedFirstAllocation = false;
 
 function patchedAllocate(box) {
@@ -36,11 +39,19 @@ function patchedAllocate(box) {
     // secondary-monitor previews down to 80%. Zero it so the workspace views
     // are laid out at the same size as on the primary monitor.
     const padding = 0;
-    const thumbnailsHeight = this._getThumbnailsHeight(contentBox);
+
+    // Allocate the independent secondary search entry + controller and reserve
+    // its height at the top of this monitor.
+    const topInset = OverviewSearch.allocateSearchUI(
+        this._monitorIndex, contentBox, width, height);
+
+    const thumbnailsBox = contentBox.copy();
+    thumbnailsBox.set_size(width, Math.max(0, height - topInset));
+    const thumbnailsHeight = this._getThumbnailsHeight(thumbnailsBox);
 
     if (this._thumbnails.visible) {
         const childBox = new Clutter.ActorBox();
-        childBox.set_origin(0, padding);
+        childBox.set_origin(0, padding + topInset);
         childBox.set_size(width, thumbnailsHeight);
         this._thumbnails.allocate(childBox);
     }
@@ -55,6 +66,11 @@ function patchedAllocate(box) {
         const initialBox = this._getWorkspacesBoxForState(initialState, ...workspaceParams);
         const finalBox = this._getWorkspacesBoxForState(finalState, ...workspaceParams);
         workspacesBox = initialBox.interpolate(finalBox, progress);
+    }
+    if (topInset > 0) {
+        workspacesBox.set_origin(workspacesBox.x1, workspacesBox.y1 + topInset);
+        workspacesBox.set_size(workspacesBox.get_width(),
+            Math.max(1, workspacesBox.get_height() - topInset));
     }
     this._workspacesView.allocate(workspacesBox);
 }
@@ -86,6 +102,22 @@ export function applyOverviewPatch() {
     giPrototype[HOOK_UP_VFUNC]('allocate', patchedAllocate);
     hookedPrototype = giPrototype;
     originalAllocate = original;
+
+    // Displays are recreated whenever the overview opens. Detach our actors
+    // first so they are not destroyed with the old displays.
+    const displayProto = WorkspacesView.WorkspacesDisplay?.prototype;
+    if (displayProto?._updateWorkspacesViews) {
+        originalUpdateWorkspacesViews = displayProto._updateWorkspacesViews;
+        displayProto._updateWorkspacesViews = function (...args) {
+            OverviewSearch.detachAll();
+            originalUpdateWorkspacesViews.apply(this, args);
+            for (const view of this._workspacesViews ?? []) {
+                if (view._thumbnails && view._monitorIndex !== undefined)
+                    OverviewSearch.attachToDisplay(view, view._monitorIndex);
+            }
+        };
+    }
+
     console.log('[MMBv2 overview] secondary-monitor workspace scaling disabled');
 }
 
@@ -94,8 +126,14 @@ export function revertOverviewPatch() {
         return;
     if (hookedPrototype && HOOK_UP_VFUNC)
         hookedPrototype[HOOK_UP_VFUNC]('allocate', originalAllocate);
+
+    const displayProto = WorkspacesView.WorkspacesDisplay?.prototype;
+    if (displayProto && originalUpdateWorkspacesViews)
+        displayProto._updateWorkspacesViews = originalUpdateWorkspacesViews;
+
     hookedPrototype = null;
     originalAllocate = null;
+    originalUpdateWorkspacesViews = null;
     loggedFirstAllocation = false;
     console.log('[MMBv2 overview] patch reverted');
 }

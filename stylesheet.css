@@ -16,3 +16,8 @@
 .multimonitor-panel .panel-button {
     y-expand: true;
 }
+
+/* Independent secondary overview search strip. */
+.multimonitor-overview-search {
+    padding: 0;
+}
