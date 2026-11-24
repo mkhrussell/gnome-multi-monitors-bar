@@ -316,7 +316,7 @@ class UnsafeModeIndicator extends SystemIndicator {
 const QuickSettings = GObject.registerClass(
 class QuickSettings extends PanelMenu.Button {
     constructor() {
-        super(0.0, C_('System menu in the top bar', 'System'), true);
+        super(0.0, _('System'), true);
 
         this._indicators = new St.BoxLayout({
             style_class: 'panel-status-indicators-box',
@@ -326,7 +326,7 @@ class QuickSettings extends PanelMenu.Button {
         this.setMenu(new QuickSettingsMenu(this, N_QUICK_SETTINGS_COLUMNS));
 
         this._setupIndicators().catch(error =>
-            logError(error, 'Failed to setup quick settings'));
+            console.error('Failed to setup quick settings', error));
     }
 
     async _setupIndicators() {
